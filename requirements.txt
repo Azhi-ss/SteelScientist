@@ -1,46 +1,56 @@
-# Core ML/DL Framework
+# SteelScientist Dependencies
+# Python >= 3.8 required
+# Install: pip install -r requirements.txt
+
+# ================== Core ML/DL Framework ==================
+# For CUDA 11.8: pip install torch==2.1.0+cu118 -f https://download.pytorch.org/whl/torch_stable.html
+# For CUDA 12.1: pip install torch==2.2.0+cu121 -f https://download.pytorch.org/whl/torch_stable.html
+# For CPU only: pip install torch==2.2.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
 torch>=2.0.0
 torchvision>=0.15.0
 torchaudio>=2.0.0
 
-# Hugging Face Ecosystem
-transformers>=4.36.0
-datasets>=2.14.0
+# ================== Hugging Face Ecosystem ==================
+transformers>=4.40.0
+datasets>=2.16.0
 tokenizers>=0.15.0
 accelerate>=0.25.0
 safetensors>=0.4.0
 
-# Scikit-learn
-scikit-learn>=1.3.0
+# ================== Scikit-learn ==================
+scikit-learn>=1.4.0
 scipy>=1.11.0
 
-# Data Processing
-numpy>=1.26.0
+# ================== Data Processing ==================
+numpy>=1.24.0,<2.0.0  # numpy 2.0 has breaking changes
 pandas>=2.1.0
 matplotlib>=3.8.0
 seaborn>=0.13.0
 
-# Hyperparameter Tuning
-ray[tune]>=2.7.0
-wandb>=0.15.0
+# ================== Hyperparameter Tuning ==================
+ray[tune]>=2.8.0
+wandb>=0.16.0
 
-# Utilities
+# ================== Utilities ==================
 tqdm>=4.66.0
 pyyaml>=6.0.0
 rich>=13.0.0
 loguru>=0.7.0
 
-# Progress visualization
-tensorboard>=2.14.0
+# ================== Progress visualization ==================
+tensorboard>=2.15.0
 tensorboardX>=2.6.0
 
-# Text processing
+# ================== Text processing ==================
 seqeval>=1.2.0
 sentencepiece>=0.1.99
-protobuf>=4.24.0
+protobuf>=4.24.0,<5.0.0  # protobuf 5.x has breaking changes
 
-# OpenAI (optional, for LLM integration)
+# ================== OpenAI (optional) ==================
 openai>=1.2.0
 
-# Performance
+# ================== Performance Optimization ==================
 optuna>=3.5.0
+
+# ================== Optional: Ray Dashboard ==================
+# ray[default]>=2.8.0  # Uncomment for Ray dashboard
