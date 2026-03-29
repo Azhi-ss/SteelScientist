@@ -57,6 +57,8 @@ ALL_OPTIM_FUNC = {
     "sgd": torch.optim.SGD
 }
 
+INVALID_PLACEHOLDER = 6666.0
+
 
 def set_global_seed(seed=123):
     try:
@@ -1047,6 +1049,10 @@ if __name__ == '__main__':
                                     best_val_r2 = -1e5
                                     best_new_text_r2 = -1e5
                                     best_exp_r2 = -1e5
+                                    patience = 20
+                                    patience_counter = 0
+                                    model_save_path = Path(f"./outputs/reg_model_saved/{paras_string}.pt")
+                                    model_save_path.parent.mkdir(parents=True, exist_ok=True)
 
                                     for epoch_num in tqdm(range(epoch)):
                                         reg_model.train()
@@ -1068,6 +1074,13 @@ if __name__ == '__main__':
                                                 preds = reg_model(**inputs)
                                                 val_loss = loss_fn(preds, y).item()
                                                 val_r2 = eval_model(y, preds)['r2']
+
+                                                if val_r2 > best_val_r2:
+                                                    best_val_r2 = val_r2
+                                                    patience_counter = 0
+                                                    torch.save(reg_model.state_dict(), model_save_path)
+                                                else:
+                                                    patience_counter += 1
 
                                             for batch, inputs in enumerate(new_text_dataloader):
                                                 y = inputs['labels'].unsqueeze(1)
@@ -1110,9 +1123,27 @@ if __name__ == '__main__':
                                             global_step=epoch_num+1
                                         )
 
+                                        if patience_counter >= patience:
+                                            print(f"Early stopping at epoch {epoch_num+1}")
+                                            break
+
                                     writer.close()
 
-                                    best_model = reg_model
+                                    model_save_path = Path(f"./outputs/reg_model_saved/{paras_string}.pt")
+                                    if model_save_path.exists():
+                                        best_model = CustomSimpleModel(
+                                            simple_layer_list=simple_layer_list,
+                                            concat_layer_list=concat_layer_list,
+                                            seq_embed_con1d_list=seq_embed_con1d_list,
+                                            seq_embed_con2d_list=[1, 1],
+                                            seq_embed_fc_list=[32, 16],
+                                            seq_embed_2d_fc_list=[32, 16],
+                                            simple_layer_drop_prob=layer_dorp,
+                                            concat_layer_drop_prob=layer_dorp,
+                                        ).to(device)
+                                        best_model.load_state_dict(torch.load(model_save_path))
+                                    else:
+                                        best_model = reg_model
 
                                     best_model.eval()
                                     with torch.no_grad():
@@ -1169,12 +1200,12 @@ if __name__ == '__main__':
 
                                     max_len = len(y_train)
 
-                                    y_val += [6666.0 for i in range(max_len-len(y_val))]
-                                    y_val_preds += [6666.0 for i in range(max_len-len(y_val_preds))]
-                                    plot_best_text_y += [6666.0 for i in range(max_len-len(plot_best_text_y))]
-                                    plot_best_text_preds += [6666.0 for i in range(max_len-len(plot_best_text_preds))]
-                                    plot_best_exp_y += [6666.0 for i in range(max_len-len(plot_best_exp_y))]
-                                    plot_best_exp_preds += [6666.0 for i in range(max_len-len(plot_best_exp_preds))]
+                                    y_val += [INVALID_PLACEHOLDER for i in range(max_len-len(y_val))]
+                                    y_val_preds += [INVALID_PLACEHOLDER for i in range(max_len-len(y_val_preds))]
+                                    plot_best_text_y += [INVALID_PLACEHOLDER for i in range(max_len-len(plot_best_text_y))]
+                                    plot_best_text_preds += [INVALID_PLACEHOLDER for i in range(max_len-len(plot_best_text_preds))]
+                                    plot_best_exp_y += [INVALID_PLACEHOLDER for i in range(max_len-len(plot_best_exp_y))]
+                                    plot_best_exp_preds += [INVALID_PLACEHOLDER for i in range(max_len-len(plot_best_exp_preds))]
 
                                     plot_result = pd.DataFrame({
                                         'y_train': y_train,
