@@ -204,16 +204,6 @@ def load_data(
         drop_col.append('Text')
     data.drop(columns=drop_col+['actions'], inplace=True)
 
-    if perplexity:
-        if 'com_embed' in fes:
-            data_com_embed = pd.DataFrame(
-                TSNE(n_components=3, learning_rate='auto', init='random', perplexity=perplexity).fit_transform(
-                    data.iloc[:, -768:]
-                ),
-                columns=['tsne'+str(i) for i in range(3)]
-            )
-            data = pd.concat([data, data_com_embed], axis=1)
-
     if label == 'train_data':
         for _ in range(50):
             data = data.sample(frac=1.0, random_state=seed)
@@ -223,8 +213,24 @@ def load_data(
         )
         train_data.reset_index(drop=True, inplace=True)
         test_data.reset_index(drop=True, inplace=True)
+
+        if perplexity and 'com_embed' in fes:
+            tsne = TSNE(n_components=3, learning_rate='auto', init='random', perplexity=perplexity)
+            train_tsne = tsne.fit_transform(train_data.iloc[:, -768:])
+            test_tsne = tsne.transform(test_data.iloc[:, -768:])
+            train_data = pd.concat([train_data, pd.DataFrame(train_tsne, columns=['tsne'+str(i) for i in range(3)])], axis=1)
+            test_data = pd.concat([test_data, pd.DataFrame(test_tsne, columns=['tsne'+str(i) for i in range(3)])], axis=1)
+
         return train_data, test_data
     else:
+        if perplexity and 'com_embed' in fes:
+            data_com_embed = pd.DataFrame(
+                TSNE(n_components=3, learning_rate='auto', init='random', perplexity=perplexity).fit_transform(
+                    data.iloc[:, -768:]
+                ),
+                columns=['tsne'+str(i) for i in range(3)]
+            )
+            data = pd.concat([data, data_com_embed], axis=1)
         return data
 
 
@@ -700,6 +706,10 @@ def train_function(config):
     best_val_r2 = -1e5
     best_new_text_r2 = -1e5
     best_exp_r2 = -1e5
+    patience = 20
+    patience_counter = 0
+    model_save_path = Path(f"./outputs/reg_model_saved/{paras_string}.pt")
+    model_save_path.parent.mkdir(parents=True, exist_ok=True)
 
     for epoch_num in tqdm(range(epoch)):
         reg_model.train()
@@ -743,6 +753,16 @@ def train_function(config):
                     plot_best_exp_preds = preds.detach().cpu().numpy()
                     plot_best_exp_result = eval_model(plot_best_exp_y, plot_best_exp_preds)
 
+        if val_r2 > best_val_r2:
+            best_val_r2 = val_r2
+            patience_counter = 0
+            torch.save(reg_model.state_dict(), model_save_path)
+        else:
+            patience_counter += 1
+            if patience_counter >= patience:
+                print(f"Early stopping at epoch {epoch_num+1}")
+                break
+
         writer.add_scalars(
             'Reg_'+dt_string+'/Loss',
             tag_scalar_dict={'train_loss': train_loss, 'val_loss': val_loss},
@@ -762,7 +782,21 @@ def train_function(config):
     writer.close()
 
     paras_string = '_'.join([str(eval(s)) + '_' for s in paras_li])
-    best_model = torch.load(f"./outputs/reg_model_saved/{paras_string}.pt")
+    model_save_path = Path(f"./outputs/reg_model_saved/{paras_string}.pt")
+    if model_save_path.exists():
+        best_model = CustomSimpleModel(
+            simple_layer_list=simple_layer_list,
+            concat_layer_list=concat_layer_list,
+            seq_embed_con1d_list=seq_embed_con1d_list,
+            seq_embed_fc_list=seq_embed_fc_list,
+            seq_embed_con2d_list=seq_embed_con2d_list,
+            seq_embed_2d_fc_list=seq_embed_2d_fc_list,
+            simple_layer_drop_prob=simple_layer_drop_prob,
+            concat_layer_drop_prob=concat_layer_drop_prob,
+        ).to(device)
+        best_model.load_state_dict(torch.load(model_save_path))
+    else:
+        best_model = reg_model
 
     best_model.eval()
     with torch.no_grad():

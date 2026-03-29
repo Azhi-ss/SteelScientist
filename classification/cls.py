@@ -22,6 +22,7 @@ from transformers import (
     AutoModel,
     AutoModelForSequenceClassification,
     AutoTokenizer,
+    EarlyStoppingCallback,
     set_seed,
     Trainer,
     TrainingArguments,
@@ -173,11 +174,11 @@ def main():
 
     optimizer_grouped_parameters = [
         {
-            'params': [p for n, p in model.named_parameters() if not 'bert' in n],
+            'params': [p for n, p in model.named_parameters() if not n.startswith('bert')],
             'lr': args.non_lm_lr
         },
         {
-            'params': [p for n, p in model.named_parameters() if 'bert' in n],
+            'params': [p for n, p in model.named_parameters() if n.startswith('bert')],
             'lr': lr
         }
     ]
@@ -194,7 +195,8 @@ def main():
         eval_dataset=val_dataset,
         tokenizer=tokenizer,
         compute_metrics=compute_metrics,
-        optimizers=(optimizer, None)
+        optimizers=(optimizer, None),
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=3)]
     )
 
     train_result = customeTrainer.train()
@@ -220,4 +222,4 @@ def main():
     run.finish()
 
 
-wandb.agent(sweep_id, function=main, count=5)
+wandb.agent(sweep_id, function=main, count=len(args.seeds) * len(args.lm_lrs))

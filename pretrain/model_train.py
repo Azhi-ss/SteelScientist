@@ -20,10 +20,11 @@ from transformers import (
     set_seed,
 )
 
-# # wandb seeting
-os.environ["WANDB_API_KEY"] = '02b38da752f7eb4bae5d07de169f4f9f0edaae70'
+# wandb setting
 os.environ["WANDB_PROJECT"] = 'steelberta'
-os.environ["WANDB_MODE"] = 'offline'
+os.environ["WANDB_MODE"] = os.getenv('WANDB_MODE', 'offline')
+if 'WANDB_API_KEY' not in os.environ:
+    os.environ["WANDB_API_KEY"] = os.getenv('WANDB_API_KEY', '')
 
 
 # logging.basicConfig(level=logging.INFO)
@@ -99,6 +100,11 @@ data_collator = DataCollatorForLanguageModeling(
 #     print(f"Samples/second: {result.metrics['train_samples_per_second']:.2f}")
 #     print_gpu_utilization()
 
+
+def print_summary(result):
+    print(f"Time: {result.metrics.get('train_runtime', 'N/A'):.2f}")
+    print(f"Samples/second: {result.metrics.get('train_samples_per_second', 'N/A'):.2f}")
+
 # print_gpu_utilization()
 
 training_args = TrainingArguments(
@@ -108,7 +114,6 @@ training_args = TrainingArguments(
     per_device_train_batch_size=8,
     per_device_eval_batch_size=80,
     gradient_accumulation_steps=72,
-    # load_best_model_at_end=True,
 
     learning_rate=1e-4,
     weight_decay=1e-2,
@@ -119,31 +124,15 @@ training_args = TrainingArguments(
     num_train_epochs=1,
     lr_scheduler_type='linear',
     warmup_ratio=0.048,
-    warmup_steps=10_000,
 
-    # eval_steps=10,
-    # save_strategy='steps',
-    # logging_strategy='steps',
-    # logging_steps=2,
-    # save_steps=10,
-    # save_total_limit=10,
-    # seed=SEED,
-    # data_seed=SEED,
-    # fp16=True,
-    # optim='adamw_torch',
-    # max_steps=100
+    save_strategy='epoch',
+    save_total_limit=3,
+    logging_strategy='epoch',
 
-    eval_steps=1,
-    save_strategy='steps',
-    logging_strategy='steps',
-    logging_steps=10,
-    save_steps=1,
-    save_total_limit=10,
     seed=SEED,
     data_seed=SEED,
     fp16=True,
     optim='adamw_torch',
-    # max_steps=100
 )
 
 trainer = Trainer(
