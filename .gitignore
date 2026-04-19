@@ -167,3 +167,6 @@ regression/outputs/
 test_log.txt
 *.log
 
+# Large DOI seed lists (~123 MB total, fetch-only inputs)
+datasets/abstracts_doi/*.csv
+
