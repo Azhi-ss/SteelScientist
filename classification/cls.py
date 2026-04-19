@@ -51,7 +51,7 @@ args = parser.parse_args()
 
 
 if args.model_name == 'steelberta':
-    model_name = './../model_saved/checkpoint-140000'
+    model_name = '/internfs/Zy/Steelllm/ckpt/SteelBERT'
     to_normalize = True
 elif args.model_name == 'scibert':
     model_name = 'allenai/scibert_scivocab_uncased'
