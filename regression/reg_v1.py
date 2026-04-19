@@ -16,8 +16,11 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')  # 非交互后端，避免无显示器时报错
+import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, root_mean_squared_error
 
 import torch
 import torch.nn.functional as F
@@ -39,7 +42,7 @@ warnings.filterwarnings('ignore')
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-model_name = './../model_saved/checkpoint-140000'
+model_name = '/internfs/Zy/Steelllm/ckpt/SteelBERT'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModel.from_pretrained(model_name).to(device)
 
@@ -103,21 +106,24 @@ def get_embeddinngs(text_list):
         text_list, padding='max_length', max_length=512, truncation=True, return_tensors="pt"
     )
     encoded_input = {k: v.to(device) for k, v in encoded_input.items()}
-    model_output = model(**encoded_input)
-    return cls_pooling(model_output).detach().cpu().numpy()[0].tolist()
+    with torch.no_grad():
+        model_output = model(**encoded_input)
+    result = cls_pooling(model_output).detach().cpu().numpy()[0].tolist()
+    torch.cuda.empty_cache()
+    return result
 
 
 def gen_text_embed(bert_df, col_embed='Text'):
     tqdm.pandas(desc='Progress bar!')
     bert_df['process_emb'] = bert_df[col_embed].progress_apply(get_embeddinngs)
 
-    temp_bert_df = pd.DataFrame(pd.Series(bert_df['process_emb'][0])).T
-    for i in range(1, bert_df.shape[0]):
+    temp_bert_df = pd.DataFrame(pd.Series(bert_df['process_emb'][bert_df.index[0]])).T
+    for i in bert_df.index[1:]:
         new_row = pd.DataFrame(pd.Series(bert_df['process_emb'][i])).T
         temp_bert_df = pd.concat([temp_bert_df, new_row], ignore_index=True, axis=0)
     temp_bert_df.reset_index(drop=True, inplace=True)
     temp_bert_df.columns = [col_embed+str(i) for i in range(768)]
-    df = pd.concat([bert_df, temp_bert_df], axis=1)
+    df = pd.concat([bert_df.reset_index(drop=True), temp_bert_df], axis=1)
     df.drop(columns=['process_emb'], inplace=True)
     return df
 
@@ -127,8 +133,13 @@ def get_ele_embeddinngs(text_list):
         text_list, padding='max_length', max_length=512, truncation=True, return_tensors="pt"
     )
     encoded_input = {k: v.to(device) for k, v in encoded_input.items()}
-    model_output = model(**encoded_input)
-    return cls_pooling(model_output).detach().cpu().numpy()
+    with torch.no_grad():
+        model_output = model(**encoded_input)
+    result = cls_pooling(model_output).detach().cpu().numpy()
+    torch.cuda.empty_cache()
+    return result
+
+
 
 
 def add_ele_embed(df):
@@ -236,7 +247,7 @@ def eval_model(y_true, y_pred):
     y_pred = y_pred.detach().cpu().numpy() if torch.is_tensor(y_pred) else y_pred
 
     r2 = round(r2_score(y_true, y_pred), 3)
-    rmse = round(mean_squared_error(y_true, y_pred, squared=False), 3)
+    rmse = round(root_mean_squared_error(y_true, y_pred), 3)
     mae = round(mean_absolute_error(y_true, y_pred), 3)
     return {"r2": r2, "rmse": rmse, "mae": mae}
 
@@ -426,36 +437,36 @@ class CustomSimpleModel(nn.Module):
         simple_layer = []
         for num_fes in simple_layer_list:
             per_unit = FcUnit(num_features=num_fes, normalization='null_norm',
-                             activation='relu', dropout_prob=simple_layer_drop_prob)
+                             activation='leaky_relu', dropout_prob=simple_layer_drop_prob)
             simple_layer.append(per_unit)
         self.simple_layer = nn.Sequential(*simple_layer)
 
         seq_embed_layer = []
         for num_channels in seq_embed_con1d_list:
-            per_unit = Cnn1dUnit(out_channels=num_channels, kernel_size=2, stride=1, padding=1)
+            per_unit = Cnn1dUnit(out_channels=num_channels, kernel_size=2, stride=1, padding=1, activation='leaky_relu')
             seq_embed_layer.append(per_unit)
         seq_embed_layer.append(nn.Flatten())
         for num_fes in seq_embed_fc_list:
             per_unit = FcUnit(num_features=num_fes, normalization='null_norm',
-                             activation='relu', dropout_prob=simple_layer_drop_prob)
+                             activation='leaky_relu', dropout_prob=simple_layer_drop_prob)
             seq_embed_layer.append(per_unit)
         self.seq_embed_layer = nn.Sequential(*seq_embed_layer)
 
         common_embed_layer = []
         for num_channels in seq_embed_con2d_list:
-            per_unit = Cnn2dUnit(out_channels=num_channels, kernel_size=2, stride=1, padding=2)
+            per_unit = Cnn2dUnit(out_channels=num_channels, kernel_size=2, stride=1, padding=2, activation='leaky_relu')
             common_embed_layer.append(per_unit)
         common_embed_layer.append(nn.Flatten())
         for num_fes in seq_embed_2d_fc_list:
             per_unit = FcUnit(num_features=num_fes, normalization='null_norm',
-                             activation='relu', dropout_prob=simple_layer_drop_prob)
+                             activation='leaky_relu', dropout_prob=simple_layer_drop_prob)
             common_embed_layer.append(per_unit)
         self.common_embed_layer = nn.Sequential(*common_embed_layer)
 
         concat_layer = []
         for num_fes in concat_layer_list:
             per_unit = FcUnit(num_features=num_fes, normalization='null_norm',
-                             activation='relu', dropout_prob=concat_layer_drop_prob)
+                             activation='leaky_relu', dropout_prob=concat_layer_drop_prob)
             concat_layer.append(per_unit)
         self.concat_layer = nn.Sequential(*concat_layer)
 
@@ -707,23 +718,22 @@ def tune_with_callback():
 if __name__ == '__main__':
     print(f"You are using '{device}' device!")
 
-    for prop in ['Elongation_value']:
+    for prop in ['Tensile_value', 'Yield_value', 'Elongation_value']:
         with open('./outputs/reg_model.csv', 'a+') as csvfile:
             csvwriter = csv.writer(csvfile)
-            csvwriter.writerow(['prop', 'train_r2', 'best_val_r2', 'best_new_text_r2', 'best_exp_r2',
-                               'seed', 'split_ratio', 'perplexity', 'train_batch', 'epoch', 'lr', 'step', 'gamma_ratio'])
+            csvwriter.writerow(['prop', 'train_r2', 'val_r2', 'seed', 'split_ratio', 'perplexity', 'train_batch', 'epoch', 'lr', 'step', 'gamma_ratio'])
 
         for simple_layer_list in [[512, 512, 512, 256]]:
             for concat_layer_list in [[64, 64, 32, 8, 4, 1]]:
                 for seq_embed_con1d_list in [[1, 1]]:
-                    for split_ratio in [0.75]:
+                    for split_ratio in [0.8]:
                         for step in [80]:
-                            for layer_dorp in [0]:
+                            for layer_dorp in [0.2]:
                                 for seed in [42]:
-                                    train_batch = 32
+                                    train_batch = 128
                                     perplexity = 3
-                                    epoch = 250
-                                    lr = 0.01
+                                    epoch = 500
+                                    lr = 0.0001
                                     gamma_ratio = 0.5
 
                                     set_global_seed(seed=seed)
@@ -732,12 +742,8 @@ if __name__ == '__main__':
 
                                     train_data, test_data = load_data(label='train_data', pred_prop=prop,
                                                                      fes=fes, split_ratio=split_ratio, seed=seed, perplexity=perplexity)
-                                    new_text_data = load_data(label='text_test', pred_prop=prop, fes=fes, perplexity=perplexity)
-                                    exp_data = load_data(label='exp_test', pred_prop=prop, fes=fes, perplexity=perplexity)
                                     print(f"train_data.shape:{train_data.shape}, test_data.shape:{test_data.shape}")
 
-                                    new_text_dataloader = DataLoader(CustomSimpleDataset(**gen_data_class(new_text_data)), batch_size=len(new_text_data))
-                                    exp_dataloader = DataLoader(CustomSimpleDataset(**gen_data_class(exp_data)), batch_size=len(exp_data))
                                     all_train_dataloader = DataLoader(CustomSimpleDataset(**gen_data_class(train_data)),
                                                                       batch_size=len(train_data), shuffle=False, drop_last=False)
                                     train_dataloader = DataLoader(CustomSimpleDataset(**gen_data_class(train_data)),
@@ -756,15 +762,22 @@ if __name__ == '__main__':
                                     ).to(device)
 
                                     loss_fn = nn.MSELoss()
-                                    optimizer = torch.optim.AdamW(reg_model.parameters(), lr=lr, weight_decay=0.01)
-                                    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=step, gamma=gamma_ratio)
+                                    optimizer = torch.optim.AdamW(reg_model.parameters(), lr=lr,
+                                                                   betas=(0.9, 0.98), eps=1e-6, weight_decay=0.01)
+                                    scheduler = torch.optim.lr_scheduler.LinearLR(optimizer,
+                                                                                  start_factor=1.0, end_factor=0.01,
+                                                                                  total_iters=epoch)
+
+                                    # Early Stopping parameters
+                                    patience = 40
+                                    no_improve_count = 0
+                                    best_val_loss_es = float('inf')
+                                    best_model_state = None
 
                                     dt_string = datetime.now().strftime("%d_%m_%H.%M.%S")
                                     writer = SummaryWriter('./outputs/runs', flush_secs=20)
 
                                     best_val_r2 = -1e5
-                                    best_new_text_r2 = -1e5
-                                    best_exp_r2 = -1e5
 
                                     for epoch_num in tqdm(range(epoch)):
                                         reg_model.train()
@@ -785,30 +798,25 @@ if __name__ == '__main__':
                                                 preds = reg_model(**inputs)
                                                 val_loss = loss_fn(preds, y).item()
                                                 val_r2 = eval_model(y, preds)['r2']
-
-                                            for batch, inputs in enumerate(new_text_dataloader):
-                                                y = inputs['labels'].unsqueeze(1)
-                                                preds = reg_model(**inputs)
-                                                new_text_r2 = eval_model(y, preds)['r2']
-                                                if new_text_r2 > best_new_text_r2:
-                                                    best_new_text_r2 = new_text_r2
-                                                    plot_best_text_y = y.detach().cpu().numpy()
-                                                    plot_best_text_preds = preds.detach().cpu().numpy()
-                                                    plot_best_text_result = eval_model(plot_best_text_y, plot_best_text_preds)
-
-                                            for batch, inputs in enumerate(exp_dataloader):
-                                                y = inputs['labels'].unsqueeze(1)
-                                                preds = reg_model(**inputs)
-                                                exp_r2 = eval_model(y, preds)['r2']
-                                                if exp_r2 > best_exp_r2:
-                                                    best_exp_r2 = exp_r2
-                                                    plot_best_exp_y = y.detach().cpu().numpy()
-                                                    plot_best_exp_preds = preds.detach().cpu().numpy()
-                                                    plot_best_exp_result = eval_model(plot_best_exp_y, plot_best_exp_preds)
-
-                                        writer.add_scalars('Reg_'+dt_string+'/Loss', tag_scalar_dict={'train_loss': train_loss, 'val_loss': val_loss}, global_step=epoch_num+1)
+                                        writer.add_scalars('Reg_'+dt_string+'/Loss', tag_scalar_dict={'train_loss': train_loss.item(), 'val_loss': val_loss}, global_step=epoch_num+1)
                                         writer.add_scalars('Reg_'+dt_string+'/R2', tag_scalar_dict={'train_r2': train_r2, 'val_r2': val_r2}, global_step=epoch_num+1)
-                                        writer.add_scalars('Reg_'+dt_string+'/Test_R2', tag_scalar_dict={'new_text_r2': new_text_r2, 'exp_r2': exp_r2}, global_step=epoch_num+1)
+
+                                        # Early Stopping Logic (Monitor Validation Loss)
+                                        if val_loss < best_val_loss_es:
+                                            best_val_loss_es = val_loss
+                                            no_improve_count = 0
+                                            best_model_state = reg_model.state_dict().copy()
+                                        else:
+                                            no_improve_count += 1
+                                            
+                                        if no_improve_count >= patience:
+                                            print(f"\\n[Early Stopping] Triggered at epoch {epoch_num} for property '{prop}' (Patience={patience}).")
+                                            break
+                                            
+                                    # Restore the best global weights before final evaluation
+                                    if best_model_state is not None:
+                                        print(f"Restoring best weights for '{prop}' with Val Loss: {best_val_loss_es:.4f}")
+                                        reg_model.load_state_dict(best_model_state)
 
                                     writer.close()
 
@@ -827,48 +835,24 @@ if __name__ == '__main__':
                                             y_val_preds = best_model(**inputs).detach().cpu().numpy()
                                             val_result = eval_model(y_val, y_val_preds)
 
-                                        for batch, inputs in enumerate(new_text_dataloader):
-                                            best_new_text_y = inputs['labels'].unsqueeze(1)
-                                            best_new_text_preds = best_model(**inputs)
-                                            best_new_text_result = eval_model(best_new_text_y, best_new_text_preds)
-
-                                        for batch, inputs in enumerate(exp_dataloader):
-                                            best_exp_y = inputs['labels'].unsqueeze(1)
-                                            best_exp_preds = best_model(**inputs)
-                                            best_exp_result = eval_model(best_exp_y, best_exp_preds)
-
                                     plot_test_data(y_train, y_train_preds, train_result, y_val, y_val_preds, val_result,
-                                                   fig_name=f"./outputs/figs/train_{paras_string}.png", labels=["Model train data", "Model test data"], point_size=5)
-                                    plot_test_data(plot_best_text_y, plot_best_text_preds, plot_best_text_result,
-                                                   plot_best_exp_y, plot_best_exp_preds, plot_best_exp_result,
-                                                   fig_name=f"./outputs/figs/test_{paras_string}.png", labels=["New literature data", "Experiment data"], point_size=15)
+                                                   fig_name=f"./outputs/figs/train_{paras_string}.png", labels=["Model train data", "Model val data"], point_size=5)
 
                                     y_train = y_train.T.tolist()[0]
                                     y_train_preds = y_train_preds.T.tolist()[0]
                                     y_val = y_val.T.tolist()[0]
                                     y_val_preds = y_val_preds.T.tolist()[0]
-                                    plot_best_text_y = plot_best_text_y.T.tolist()[0]
-                                    plot_best_text_preds = plot_best_text_preds.T.tolist()[0]
-                                    plot_best_exp_y = plot_best_exp_y.T.tolist()[0]
-                                    plot_best_exp_preds = plot_best_exp_preds.T.tolist()[0]
 
                                     max_len = len(y_train)
                                     y_val += [6666.0 for i in range(max_len-len(y_val))]
                                     y_val_preds += [6666.0 for i in range(max_len-len(y_val_preds))]
-                                    plot_best_text_y += [6666.0 for i in range(max_len-len(plot_best_text_y))]
-                                    plot_best_text_preds += [6666.0 for i in range(max_len-len(plot_best_text_preds))]
-                                    plot_best_exp_y += [6666.0 for i in range(max_len-len(plot_best_exp_y))]
-                                    plot_best_exp_preds += [6666.0 for i in range(max_len-len(plot_best_exp_preds))]
 
                                     plot_result = pd.DataFrame({
                                         'y_train': y_train, 'y_train_preds': y_train_preds,
                                         'y_val': y_val, 'y_val_preds': y_val_preds,
-                                        'text_y': plot_best_text_y, 'text_preds': plot_best_text_preds,
-                                        'exp_y': plot_best_exp_y, 'exp_preds': plot_best_exp_preds
                                     })
                                     plot_result.to_excel(f"./outputs/preds/preds_{paras_string}.xlsx", index=None)
 
                                     with open('./outputs/reg_model.csv', 'a+') as csvfile:
                                         csvwriter = csv.writer(csvfile)
-                                        csvwriter.writerow([prop, train_result['r2'], val_result['r2'], best_new_text_result['r2'],
-                                                           best_exp_result['r2'], seed, split_ratio, perplexity, train_batch, epoch, lr, step, gamma_ratio])
+                                        csvwriter.writerow([prop, train_result['r2'], val_result['r2'], seed, split_ratio, perplexity, train_batch, epoch, lr, step, gamma_ratio])
