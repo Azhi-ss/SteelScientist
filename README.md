@@ -18,6 +18,8 @@ Steel design based on a large language model.
 }
 ```
 
+> **Note:** The fully parsed markdown version of the original paper (extracted via MinerU), along with all high-resolution figures and detailed training hyperparameters (e.g., 0.96 Billion words corpus, AdamW $\beta_1=0.9$, learning rate setups, 188M parameters DeBERTa base), can be found locally at `docs/paper/steel-design-mineru.md` and in the [AGENT.md](./.agent/AGENT.md) documentation.
+
 ## Project Structure
 
 ```
