@@ -1,0 +1,3 @@
+version,train_r2_mean,val_r2_mean,val_r2_best,val_rmse_best,val_mae_best,best_seed,best_val_r2_gain
+legacy_v2_academic,0.16032,0.17746,0.384,301.5333,283.0799,46,0.0
+current_hea_refactor,0.5840400000000001,0.56442,0.8622,142.6239,115.9724,46,0.47819999999999996
