@@ -164,8 +164,16 @@ others/
 
 # Project-specific large/runtime artifacts
 regression/outputs/
+pretrain/outputs/
+learn/
 test_log.txt
 *.log
+*.pt
+*.safetensors
+
+# Local exploratory pretraining scripts not part of the public workflow
+pretrain/hea_continue_mlm.py
+pretrain/hea_extract_corpus.py
 
 # Large DOI seed lists (~123 MB total, fetch-only inputs)
 datasets/abstracts_doi/*.csv

@@ -42,7 +42,7 @@ SteelScientist/
 │       └── reg_model.csv           #     汇总指标
 │
 ├── evaluation/                     # ── 评估 Notebooks ──
-│   ├── steelberta_actions.ipynb    #   工艺词 Embedding → UMAP → HDBSCAN
+│   ├── steelberta_actions.ipynb    #   工艺词聚类展示，不作为当前回归有效特征
 │   ├── supplemet_table.ipynb       #   论文附表 S5 格式化
 │   └── model_words_similarity.ipynb#   词相似度 / 开发草稿
 │
@@ -107,7 +107,7 @@ SteelScientist/
 
 - **任务**: 预测钢铁力学性能 (UTS / YS / EL)
 - **模型**: FC + 1D-CNN + 2D-CNN 混合网络 (`CustomSimpleModel`)
-- **特征**: 成分 wt% + text_embed(768d) + ele_embed(768d) + action_embed(768d) + t-SNE(3d)
+- **特征**: 成分 wt% + text_embed(768d) + ele_embed(768d) + t-SNE(3d)；`action_embed` 已证实无有效增益，仅保留旧脚本兼容说明
 - **数据**: `regression/datasets/train_data.xlsx` (677 条, ~35 个元素列)
 - **调参**: Ray Tune / Optuna + Wandb
 

@@ -68,48 +68,27 @@
   - **SteelBERT 参数**：解除冻结，参与反向传播。这是 Table S9 中达到 $R^2 \approx 0.9$ 的主要原因。
   - **训练环境**: 需 `8 x NVIDIA A100 40GB` 集群支持全量参数更新。
 
-## 核心数据流水线 (Text -> Actions -> Prediction)
+## 核心数据流水线 (Text + Composition -> Prediction)
 
-论文的完整预测链路实际上分为三个阶段，**分类任务是回归任务的前置依赖**：
+当前回归任务以完整工艺文本和成分特征为主，不再把抽取后的 `actions` 当作有效独立特征：
 
 ```
-原始论文全文 (Raw Text / data.csv 的 Text 列)
-        │
-        ▼
-┌─────────────────────────────────┐
-│ ① classification/cls.py        │  分类任务 (Binary Classification)
-│    逐句判断: "这句话描述了工艺？" │  → 正样本 494 句 / 负样本 39,358 句
-│    是 → 保留  /  否 → 丢弃       │    (SI Note S1: 258 篇文献, 39,852 句)
-└─────────────────────────────────┘
-        │
-        ▼
-  筛选出的工艺语句 (Action sentences)
+原始论文全文 / 表格工艺描述 (data.csv 的 Text 列)
         │
         ▼
 ┌──────────────────────────────────────────┐
-│ ② evaluation/steelberta_actions.ipynb    │  工艺词归一化 & 聚类
-│    SteelBERT Embedding → UMAP 降维       │  → tokens_n.json / chunks_n.json
-│    → HDBSCAN 聚类 → 标准化工艺词          │    (对应 SI Fig S1 + Table S5)
-└──────────────────────────────────────────┘
-        │
-        ▼
-  干净的 actions 列 (如 "quenching", "cold rolling")
-        │
-        ▼
-┌──────────────────────────────────────────┐
-│ ③ regression/reg_v1.py                   │  回归预测
-│    SteelBERT 将 actions + 元素配比        │
-│    编码为 768 维向量 → MLP 预测 YS/UTS/EL │
+│ regression/reg_v1.py / reg_optuna.py     │
+│ SteelBERT 编码 Text + 元素成分特征        │
+│ → MLP/CNN 回归预测 YS/UTS/EL             │
 └──────────────────────────────────────────┘
 ```
 
-### 核心认知反转：Text 胜过 Actions
-前期复现中我们曾以为 `df['actions'] = df['Text']` 是一种粗暴的妥协（引入了太多非工艺噪音），**但经与论文原作者沟通确认，这其实就是他们最终采取的最优策略！**
+### Text 胜过 Actions
 
-- **推翻错误认知**：论文中的分类 (cls.py) 和聚类 (Table S5) 主要是为了向审稿人证明大模型具备提取和理解材料学实体的能力。
-- **真实训练逻辑**：在最终回归预测（预测强度/延伸率）时，**使用原始包含完整上下文的自然语言段落 (`Text`) 效果实际上好于提取出的干瘪工艺词（`actions`）**。
-- **原理解释**：像 `then`、`subsequently` 等连词以及时态构成的完整语境，能更好地触发 SteelBERT 自注意力机制，帮助网络理解加工的**先后顺序和时序逻辑**，这是"孤立工艺词袋"做不到的。
-- **结论**：回归管线的输入数据（`Text` 列直接喂给模型）已经是完全正确且最优的状态，性能差距100% 来源于尚未解密的 **Optuna 网络架构超参**与**最后阶段的局部冻结微调**。
+- **已确认结论**：相关 `actions` / `action_embed` 消融已证实没有有效增益，后续不再把它作为核心建模输入。
+- **保留原因**：旧版 `reg_v1.py` 的输入 schema 仍可能要求 `actions` 列；若需要兼容旧脚本，直接复制 `Text` 或 `Processing condition` 即可。
+- **定位调整**：`classification/cls.py` 和 `evaluation/steelberta_actions.ipynb` 主要用于论文中的工艺实体识别、聚类展示和可解释性分析，不作为当前回归性能提升路径。
+- **主线输入**：最终回归预测应优先使用包含完整上下文的自然语言段落 (`Text`) 和元素成分特征。
 
 ---
 
@@ -286,6 +265,20 @@ batch_size: [32, 64]
 | `regression/outputs/optuna/csvs/` | 搜索历史 CSV |
 | `regression/outputs/optuna/figs/` | 所有生成的图 |
 | `regression/outputs/optuna/models/` | 最优模型 .pt 文件 |
+
+## 新检索 Labelled Clusters 钢铁数据
+
+- **数据目录**：`datasets/steel_labelled_clusters/`
+- **原始文件**：`datasets/steel_labelled_clusters/raw/Steel database with labelled clusters.xlsx`
+- **清洗输出**：`datasets/steel_labelled_clusters/clean.csv` (`1943` 行，严格去重)
+- **8:2 划分**：`datasets/steel_labelled_clusters/train.csv` (`1554` 行) / `datasets/steel_labelled_clusters/val.csv` (`389` 行)
+- **重复审计**：`datasets/steel_labelled_clusters/duplicate_groups.csv` / `datasets/steel_labelled_clusters/duplicate_rows.csv`
+- **处理脚本**：`scripts/prepare_labelled_clusters_data.py`
+- **当前规则**：原始映射全量文件保存在 `datasets/steel_labelled_clusters/full_with_duplicates.csv` (`3234` 行)；训练母表按 `Material + Text + 36 元素成分 + Tensile/Yield/Elongation + cluster_number + cluster_label` 严格去重；`Processing condition` 映射为 `Text`；`actions` 仅作为旧脚本兼容字段同步复制，不作为有效独立特征；目标列映射为 `Tensile_value` / `Yield_value` / `Elongation_value`；标准 36 个元素列缺失项补 `0.0`；使用固定 `seed=42` 做回归 8:2 切分。
+- **最新回归入口**：`regression/steel_labelled_clusters_regression.py`，复用 `hea_regression.py` 中的 SteelBERT 冻结特征提取 + 三路门控融合模型，输入为 `Text`、36 元素原始成分和元素 embedding，不使用 `action_embed`。
+- **训练输出目录**：`regression/outputs/steel_labelled_clusters/<target>/`，每个目标保存 `best_model.pt`、`seed_summary.csv`、`parity_train.png`、`parity_val.png`。
+- **首轮结果** (`seed=42..46`, 300 epochs, patience=30)：UTS `Val R²=0.8931` (best seed 42), YS `Val R²=0.8785` (best seed 46), EL `Val R²=0.8618` (best seed 46)。对应模型与图已保存到上述输出目录。
+- **去 raw_composition 消融** (`--feature_mode text_ele`)：输出在 `regression/outputs/steel_labelled_clusters/text_ele/<target>/`。结果为 UTS `Val R²=0.8872` (比 full -0.0059), YS `Val R²=0.8838` (比 full +0.0053), EL `Val R²=0.8572` (比 full -0.0046)。结论：raw 分支贡献很小；去掉后 YS 略升，UTS/EL 略降，整体差异 <0.006，可作为简化模型候选，但 full 模型仍是当前默认最高综合性能。
 
 ## evaluation 目录文件功能
 

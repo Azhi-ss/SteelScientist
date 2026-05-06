@@ -1,6 +1,6 @@
 # 数据集说明
 
-> 最后更新: 2026-03-31
+> 最后更新: 2026-05-06
 
 ## 下游回归任务数据
 
@@ -38,23 +38,22 @@ datasets/data.csv   # 677 条钢铁样本，即论文回归任务所用的完整
 | 缺失列 | 代码用途 | 处理方案 |
 |--------|---------|---------|
 | `status` | `filter = data['status'] == 1` 过滤有效数据 | **补列全填 `1`**（data.csv 已是过滤后数据） |
-| `actions` | `gen_text_embed(data, col_embed='actions')` 生成 768 维工艺嵌入特征 | **复制 `Text` 列**（两者语义高度重叠） |
+| `actions` | 旧版 `reg_v1.py` 的兼容字段 | 若旧脚本要求该列，直接复制 `Text`；后续建模不再把它作为有效独立特征 |
 | `Files` | drop_cols → 直接丢弃 | 补空列或忽略 |
 | `problem` | drop_cols → 直接丢弃 | 补空列或忽略 |
 | `title` | drop_cols → 直接丢弃 | 补空列或忽略 |
 | `abstract` | drop_cols → 直接丢弃 | 补空列或忽略 |
 
 > [!IMPORTANT]
-> `actions` 列是模型的**第四路特征**（action_embed，768 维），不可省略。使用 `Text` 替代是合理近似，因为 `actions` 本质是从工艺文本中精提取的动作子片段。
+> 相关消融已证实 `actions` / `action_embed` 没有带来有效增益。保留 `actions` 仅为兼容旧脚本输入 schema；推荐模型输入以 `Text` 和成分特征为主。
 
-### 特征一览（模型四路输入）
+### 特征一览（推荐有效输入）
 
 | 特征名 | 构造方式 | 维度 |
 |--------|---------|------|
 | `com` | 元素成分列 (wt%) | ~35 维 |
 | `text_embed` | SteelBERT 对 `Text` 列的 [CLS] 嵌入 | 768 维 |
 | `com_embed` | SteelBERT 对各元素名称嵌入的加权平均 | 768 维 |
-| `action_embed` | SteelBERT 对 `actions` 列的 [CLS] 嵌入 | 768 维 |
 
 ### 数据统计
 
@@ -72,6 +71,84 @@ datasets/data.csv   # 677 条钢铁样本，即论文回归任务所用的完整
 ```bash
 python scripts/prepare_regression_data.py
 ```
+
+### Labelled Clusters 新检索数据
+
+新增原始文件：
+
+```
+datasets/steel_labelled_clusters/raw/Steel database with labelled clusters.xlsx
+```
+
+该文件包含 `3234` 条带工艺聚类标签的钢铁性能记录。使用以下脚本生成去重清洗版 CSV 和固定 8:2 回归划分：
+
+```bash
+python scripts/prepare_labelled_clusters_data.py
+```
+
+输出文件：
+
+```
+datasets/steel_labelled_clusters/full_with_duplicates.csv  # 原始映射后全量 3234 行
+datasets/steel_labelled_clusters/clean.csv                 # 严格去重后 1943 行
+datasets/steel_labelled_clusters/train.csv                 # 8:2 训练集，1554 行
+datasets/steel_labelled_clusters/val.csv                   # 8:2 验证集，389 行
+datasets/steel_labelled_clusters/duplicate_rows.csv        # 重复行审计明细
+datasets/steel_labelled_clusters/duplicate_groups.csv      # 重复组审计汇总
+datasets/steel_labelled_clusters/reg_v1_train_data.xlsx    # reg_v1 兼容 Excel 母表
+datasets/steel_labelled_clusters/README.md                 # 数据目录说明
+```
+
+清洗规则：
+
+- **严格去重**：按 `Material + Text + 36 元素成分 + Tensile/Yield/Elongation + cluster_number + cluster_label` 去重，`3234` 行变为 `1943` 行。
+- `Name` → `Material`。
+- `Processing condition` → `Text`；`actions` 仅作为兼容字段同步复制，不作为有效独立特征。
+- `(Ultimate) Tensile strength (MPa)` → `Tensile_value`。
+- `Yield strength (MPa)` → `Yield_value`。
+- `Ductility (%)` → `Elongation_value`。
+- 原始存在的元素列转为 `float64`；原始缺失的标准 36 元素列补 `0.0`。
+- 保留 `source_entry`、`cluster_number`、`cluster_label`、`cluster_number_0_to_11` 作为聚类元数据。
+- 使用固定 `seed=42` 随机划分为 8:2 训练/验证集；去重后 train/val 严格键无重叠。
+
+最新回归训练入口：
+
+```bash
+python regression/steel_labelled_clusters_regression.py \
+  --target Tensile_value Yield_value Elongation_value
+```
+
+该入口复用 `regression/hea_regression.py` 的 SteelBERT 冻结特征提取 + 三路门控融合回归模型，但适配为 36 个钢铁元素列和 `Tensile_value` / `Yield_value` / `Elongation_value` 三个目标。训练输出位于：
+
+```
+regression/outputs/steel_labelled_clusters/
+```
+
+首轮训练结果 (`seed=42..46`, 300 epochs, patience=30)：
+
+| 目标 | Best seed | Train R² | Val R² | Val RMSE | Val MAE |
+|------|-----------|----------|--------|----------|---------|
+| `Tensile_value` | 42 | 0.9506 | 0.8931 | 106.5751 | 67.0210 |
+| `Yield_value` | 46 | 0.9485 | 0.8785 | 111.4556 | 67.7179 |
+| `Elongation_value` | 46 | 0.9482 | 0.8618 | 2.3673 | 1.6446 |
+
+去除 `raw_composition` 的两路消融入口：
+
+```bash
+python regression/steel_labelled_clusters_regression.py \
+  --feature_mode text_ele \
+  --target Tensile_value Yield_value Elongation_value
+```
+
+消融结果 (`seed=42..46`, 300 epochs, patience=30)：
+
+| 目标 | Full Val R² | Text+Element Val R² | 差值 |
+|------|-------------|---------------------|------|
+| `Tensile_value` | 0.8931 | 0.8872 | -0.0059 |
+| `Yield_value` | 0.8785 | 0.8838 | +0.0053 |
+| `Elongation_value` | 0.8618 | 0.8572 | -0.0046 |
+
+结论：`raw_composition` 分支贡献很小；去掉后 YS 略升，UTS/EL 略降，整体差异小于 `0.006`。当前默认仍保留 full 模型，`text_ele` 可作为简化模型候选。
 
 ### 数据划分与评估 (基于源码与原文 SI.md Note S3)
 
