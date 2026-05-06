@@ -15,6 +15,7 @@ This directory contains the cleaned steel labelled-clusters dataset used by
 | `duplicate_rows.csv` | 2560 | All rows that belong to strict duplicate groups. |
 | `duplicate_groups.csv` | 1269 | One row per strict duplicate group. |
 | `reg_v1_train_data.xlsx` | 1943 | Excel export for legacy `reg_v1.py` compatibility. |
+| `inference_sample.csv` | 20 | Small inference example copied from the validation split. |
 
 ## Regeneration
 
@@ -37,3 +38,34 @@ Material + Text + 36 element columns + Tensile_value + Yield_value + Elongation_
 `actions` is retained only as a legacy schema compatibility field and is copied
 from `Text`; it is not used as an effective independent feature in the current
 regression model.
+
+## Inference Example
+
+The default inference script uses the full-model weights copied to:
+
+```text
+/internfs/Zy/Steelllm/ckpt/steel_labelled_clusters_regression/
+```
+
+Run from the repository root:
+
+```bash
+./scripts/run_steel_labelled_clusters_inference.sh
+```
+
+Defaults:
+
+```text
+input : datasets/steel_labelled_clusters/inference_sample.csv
+output: regression/outputs/steel_labelled_clusters/inference_predictions.csv
+ckpt  : /internfs/Zy/Steelllm/ckpt/steel_labelled_clusters_regression
+```
+
+You can also pass custom paths:
+
+```bash
+./scripts/run_steel_labelled_clusters_inference.sh input.csv output.csv /path/to/ckpt_dir
+```
+
+The input CSV must contain `Text` and the 36 standard element columns. If target
+columns are present, they are preserved in the output for quick comparison.

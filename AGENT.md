@@ -279,6 +279,7 @@ batch_size: [32, 64]
 - **训练输出目录**：`regression/outputs/steel_labelled_clusters/<target>/`，每个目标保存 `best_model.pt`、`seed_summary.csv`、`parity_train.png`、`parity_val.png`。
 - **首轮结果** (`seed=42..46`, 300 epochs, patience=30)：UTS `Val R²=0.8931` (best seed 42), YS `Val R²=0.8785` (best seed 46), EL `Val R²=0.8618` (best seed 46)。对应模型与图已保存到上述输出目录。
 - **去 raw_composition 消融** (`--feature_mode text_ele`)：输出在 `regression/outputs/steel_labelled_clusters/text_ele/<target>/`。结果为 UTS `Val R²=0.8872` (比 full -0.0059), YS `Val R²=0.8838` (比 full +0.0053), EL `Val R²=0.8572` (比 full -0.0046)。结论：raw 分支贡献很小；去掉后 YS 略升，UTS/EL 略降，整体差异 <0.006，可作为简化模型候选，但 full 模型仍是当前默认最高综合性能。
+- **推理入口**：`scripts/run_steel_labelled_clusters_inference.sh` 调用 `regression/steel_labelled_clusters_inference.py`，默认读取 `datasets/steel_labelled_clusters/inference_sample.csv`，加载 `/internfs/Zy/Steelllm/ckpt/steel_labelled_clusters_regression/*_best_model.pt`，输出 `regression/outputs/steel_labelled_clusters/inference_predictions.csv`。
 
 ## evaluation 目录文件功能
 

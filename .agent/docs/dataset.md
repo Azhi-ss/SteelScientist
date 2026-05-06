@@ -150,6 +150,22 @@ python regression/steel_labelled_clusters_regression.py \
 
 结论：`raw_composition` 分支贡献很小；去掉后 YS 略升，UTS/EL 略降，整体差异小于 `0.006`。当前默认仍保留 full 模型，`text_ele` 可作为简化模型候选。
 
+推理示例：
+
+```bash
+./scripts/run_steel_labelled_clusters_inference.sh
+```
+
+默认使用：
+
+```
+input : datasets/steel_labelled_clusters/inference_sample.csv
+ckpt  : /internfs/Zy/Steelllm/ckpt/steel_labelled_clusters_regression/
+output: regression/outputs/steel_labelled_clusters/inference_predictions.csv
+```
+
+推理输入需要包含 `Text` 和 36 个标准元素列；若包含真实目标列，会原样保留到输出中用于对比。
+
 ### 数据划分与评估 (基于源码与原文 SI.md Note S3)
 
 根据论文原文，回归任务采用 **8:2** 的比例划分为训练集和验证集。目前脚本的处理逻辑为：
