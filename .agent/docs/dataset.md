@@ -159,7 +159,7 @@ python regression/steel_labelled_clusters_regression.py \
 默认使用：
 
 ```
-input : datasets/steel_labelled_clusters/inference_sample.csv
+input : /internfs/Zy/Steelllm/steel_labelled_clusters_inference_sample.csv
 ckpt  : /internfs/Zy/Steelllm/ckpt/steel_labelled_clusters_regression/
 output: regression/outputs/steel_labelled_clusters/inference_predictions.csv
 ```

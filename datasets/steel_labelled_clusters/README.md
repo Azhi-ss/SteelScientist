@@ -15,7 +15,7 @@ This directory contains the cleaned steel labelled-clusters dataset used by
 | `duplicate_rows.csv` | 2560 | All rows that belong to strict duplicate groups. |
 | `duplicate_groups.csv` | 1269 | One row per strict duplicate group. |
 | `reg_v1_train_data.xlsx` | 1943 | Excel export for legacy `reg_v1.py` compatibility. |
-| `inference_sample.csv` | 20 | Small inference example copied from the validation split. |
+| `inference_sample.csv` | 20 | Small inference example copied from the validation split; also copied to `/internfs/Zy/Steelllm/steel_labelled_clusters_inference_sample.csv`. |
 
 ## Regeneration
 
@@ -56,7 +56,7 @@ Run from the repository root:
 Defaults:
 
 ```text
-input : datasets/steel_labelled_clusters/inference_sample.csv
+input : /internfs/Zy/Steelllm/steel_labelled_clusters_inference_sample.csv
 output: regression/outputs/steel_labelled_clusters/inference_predictions.csv
 ckpt  : /internfs/Zy/Steelllm/ckpt/steel_labelled_clusters_regression
 ```
@@ -65,7 +65,7 @@ You can also pass custom options:
 
 ```bash
 ./scripts/run_steel_labelled_clusters_inference.sh \
-  --input datasets/steel_labelled_clusters/inference_sample.csv \
+  --input /internfs/Zy/Steelllm/steel_labelled_clusters_inference_sample.csv \
   --output regression/outputs/steel_labelled_clusters/inference_predictions.csv \
   --ckpt-dir /internfs/Zy/Steelllm/ckpt/steel_labelled_clusters_regression \
   --model-name /internfs/Zy/Steelllm/ckpt/SteelBERT \

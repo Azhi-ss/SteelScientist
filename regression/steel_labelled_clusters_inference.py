@@ -36,7 +36,7 @@ else:
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_INPUT = REPO_ROOT / "datasets" / "steel_labelled_clusters" / "inference_sample.csv"
+DEFAULT_INPUT = Path("/internfs/Zy/Steelllm/steel_labelled_clusters_inference_sample.csv")
 DEFAULT_OUTPUT = REPO_ROOT / "regression" / "outputs" / "steel_labelled_clusters" / "inference_predictions.csv"
 DEFAULT_CKPT_DIR = Path("/internfs/Zy/Steelllm/ckpt/steel_labelled_clusters_regression")
 

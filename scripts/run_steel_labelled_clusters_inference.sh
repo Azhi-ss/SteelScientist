@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-INPUT_CSV="${REPO_ROOT}/datasets/steel_labelled_clusters/inference_sample.csv"
+INPUT_CSV="/internfs/Zy/Steelllm/steel_labelled_clusters_inference_sample.csv"
 OUTPUT_CSV="${REPO_ROOT}/regression/outputs/steel_labelled_clusters/inference_predictions.csv"
 CKPT_DIR="/internfs/Zy/Steelllm/ckpt/steel_labelled_clusters_regression"
 MODEL_NAME="/internfs/Zy/Steelllm/ckpt/SteelBERT"
@@ -28,7 +28,7 @@ Options:
   -h, --help            Show this help message.
 
 Defaults:
-  input      datasets/steel_labelled_clusters/inference_sample.csv
+  input      /internfs/Zy/Steelllm/steel_labelled_clusters_inference_sample.csv
   output     regression/outputs/steel_labelled_clusters/inference_predictions.csv
   ckpt-dir   /internfs/Zy/Steelllm/ckpt/steel_labelled_clusters_regression
   model-name /internfs/Zy/Steelllm/ckpt/SteelBERT
