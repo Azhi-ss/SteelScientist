@@ -61,10 +61,16 @@ output: regression/outputs/steel_labelled_clusters/inference_predictions.csv
 ckpt  : /internfs/Zy/Steelllm/ckpt/steel_labelled_clusters_regression
 ```
 
-You can also pass custom paths:
+You can also pass custom options:
 
 ```bash
-./scripts/run_steel_labelled_clusters_inference.sh input.csv output.csv /path/to/ckpt_dir
+./scripts/run_steel_labelled_clusters_inference.sh \
+  --input datasets/steel_labelled_clusters/inference_sample.csv \
+  --output regression/outputs/steel_labelled_clusters/inference_predictions.csv \
+  --ckpt-dir /internfs/Zy/Steelllm/ckpt/steel_labelled_clusters_regression \
+  --model-name /internfs/Zy/Steelllm/ckpt/SteelBERT \
+  --batch-size 32 \
+  --targets "Tensile_value Yield_value Elongation_value"
 ```
 
 The input CSV must contain `Text` and the 36 standard element columns. If target
